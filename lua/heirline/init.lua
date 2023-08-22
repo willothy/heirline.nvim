@@ -92,7 +92,7 @@ function M.setup(config)
 
     if config.statuscolumn then
         M.statuscolumn = StatusLine:new(config.statuscolumn)
-        vim.o.statuscolumn = "%{%v:lua.require'heirline'.eval_statuscolumn()%}"
+        vim.o.statuscolumn = "%{%v:lua.require'heirline'.eval_statuscolumn(v:lnum, v:relnum)%}"
     end
 end
 
@@ -101,12 +101,12 @@ end
 ---@param winnr integer
 ---@param full_width boolean
 ---@return string
-local function _eval(statusline, winnr, full_width)
+local function _eval(statusline, winnr, full_width, args)
     statusline.winnr = winnr
     statusline._flexible_components = {}
     statusline._updatable_components = {}
     statusline._buflist = {}
-    local out = statusline:eval()
+    local out = statusline:eval(args)
     local buflist = statusline._buflist[1]
 
     -- flexible components adapting to full-width buflist, shrinking them to the maximum if greater than vim.o.columns
@@ -148,9 +148,15 @@ end
 
 --
 ---@return string
-function M.eval_statuscolumn()
-    local winnr = vim.api.nvim_win_get_number(0)
-    return _eval(M.statuscolumn, winnr, true)
+function M.eval_statuscolumn(lnum, relnum)
+    local winnr = vim.api.nvim_get_current_win()
+
+    M.statuscolumn.lnum = lnum
+    M.statuscolumn.relnum = vim.v.relnum
+    return _eval(M.statuscolumn, winnr, true, {
+        lnum = lnum,
+        relnum = relnum,
+    })
 end
 
 local function timeit(func, args)

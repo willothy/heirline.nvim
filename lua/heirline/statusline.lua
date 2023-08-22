@@ -302,7 +302,7 @@ end
 
 ---Evaluate component and its children recursively
 ---@return boolean
-function StatusLine:_eval()
+function StatusLine:_eval(args)
     if not self:local_("_tree") then
         -- root component has no parent tree
         -- may be "stray" component
@@ -352,7 +352,7 @@ function StatusLine:_eval()
     end
 
     local hl = self.hl or {}
-    hl = type(hl) == "function" and (hl(self) or {}) or hl -- self raw hl, <string,table,nil>
+    hl = type(hl) == "function" and (hl(self, args) or {}) or hl -- self raw hl, <string,table,nil>
 
     if type(hl) == "string" then
         hl = utils.get_highlight(hl)
@@ -378,7 +378,7 @@ function StatusLine:_eval()
 
     local provider = self.provider
     if provider then
-        local provider_str = type(provider) == "function" and (provider(self) or "") or (provider or "")
+        local provider_str = type(provider) == "function" and (provider(self, args) or "") or (provider or "")
         local hl_str_start, hl_str_end = eval_hl(self.merged_hl)
         tbl_insert(tree, hl_str_start .. provider_str .. hl_str_end)
     end
@@ -395,7 +395,7 @@ function StatusLine:_eval()
     for _, child in ipairs(picked_children or self) do
         child._tree = {}
         tbl_insert(tree, child._tree)
-        local ret = child:_eval()
+        local ret = child:_eval(args)
         if not ret then
             table.remove(tree)
         end
@@ -469,8 +469,8 @@ function StatusLine:_freeze_cache()
     end
 end
 
-function StatusLine:eval()
-    self:_eval()
+function StatusLine:eval(args)
+    self:_eval(args)
     return self:traverse()
 end
 
@@ -537,7 +537,7 @@ end
 
 ---@param full_width boolean
 ---@param out string
-function StatusLine:expand_or_contract_flexible_components(full_width, out)
+function StatusLine:expand_or_contract_flexible_components(full_width, out, args)
     local flexible_components = self._flexible_components
     if not flexible_components or not next(flexible_components) then
         return
@@ -560,7 +560,7 @@ function StatusLine:expand_or_contract_flexible_components(full_width, out)
                     if next_child(component) then
                         out_of_components = false
                         local prev_len = count_chars(component:traverse())
-                        local cur_len = count_chars(component:eval())
+                        local cur_len = count_chars(component:eval(args))
                         -- component:clear_tree()
                         -- component._tree[1] = component[component:get_win_attr("_win_child_index")]:traverse()
                         saved_chars = saved_chars + (prev_len - cur_len)
