@@ -55,6 +55,11 @@ function M.request_redraw()
     end)
 end
 
+--- A pulse signal returned by event-only sources. Its integer value is an
+--- opaque, monotonically increasing tick; read it solely to subscribe a
+--- computation to the source's events, not for the value itself.
+---@alias heirline.Trigger fun(): integer
+
 ---@class heirline.source.AutocmdSpec
 ---@field events string|string[] event name(s) to listen for; may also be passed positionally as `[1]`
 ---@field pattern? string|string[] autocommand pattern(s)
@@ -142,7 +147,7 @@ end
 --- recompute whenever `doautocmd User <pattern>` fires. This is the reactive
 --- equivalent of the classic `update = { "User", pattern = <pattern> }`.
 ---@param pattern string|string[]
----@return fun(): any get, fun() dispose
+---@return heirline.Trigger get, fun() dispose
 function M.from_user_event(pattern)
     return M.from_autocmd({ events = "User", pattern = pattern, desc = "heirline reactive User source" })
 end

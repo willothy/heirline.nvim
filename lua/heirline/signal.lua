@@ -15,15 +15,17 @@ local M = {}
 
 local source = require("heirline.source")
 
---- Cache of singleton getters keyed by accessor name.
----@type table<string, fun(): any>
+--- Cache of singleton getters keyed by accessor name. The getters carry
+--- different value types, so the map is typed by the function shape only.
+---@type table<string, function>
 local singletons = {}
 
 --- Return the cached singleton for `key`, creating it with `factory` on first
 --- use.
+---@generic T
 ---@param key string
----@param factory fun(): fun(): any
----@return fun(): any
+---@param factory fun(): fun(): T
+---@return fun(): T
 local function singleton(key, factory)
     local getter = singletons[key]
     if not getter then
@@ -49,7 +51,7 @@ function M.mode()
 end
 
 --- Recompute trigger for cursor movement (normal and insert).
----@return fun(): any
+---@return heirline.Trigger
 function M.on_cursor_move()
     return singleton("on_cursor_move", function()
         return (source.from_autocmd({
@@ -61,7 +63,7 @@ end
 
 --- Recompute trigger for changes to the buffer shown in a window: switching
 --- buffers, writing, or renaming.
----@return fun(): any
+---@return heirline.Trigger
 function M.on_buf_change()
     return singleton("on_buf_change", function()
         return (source.from_autocmd({
@@ -72,7 +74,7 @@ function M.on_buf_change()
 end
 
 --- Recompute trigger for window focus and layout changes.
----@return fun(): any
+---@return heirline.Trigger
 function M.on_win_change()
     return singleton("on_win_change", function()
         return (source.from_autocmd({
@@ -83,7 +85,7 @@ function M.on_win_change()
 end
 
 --- Recompute trigger for diagnostic updates.
----@return fun(): any
+---@return heirline.Trigger
 function M.on_diagnostics_change()
     return singleton("on_diagnostics_change", function()
         return (source.from_autocmd({
@@ -94,7 +96,7 @@ function M.on_diagnostics_change()
 end
 
 --- Recompute trigger for LSP attach/detach.
----@return fun(): any
+---@return heirline.Trigger
 function M.on_lsp_change()
     return singleton("on_lsp_change", function()
         return (source.from_autocmd({
