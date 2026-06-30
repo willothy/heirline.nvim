@@ -61,6 +61,7 @@ end
 ---@field get? fun(args: table): any computes the signal's value from the event args; omit for a pulse source
 ---@field immediate? boolean for value sources, whether to compute an initial value eagerly (default true)
 ---@field equals? (fun(a: any, b: any): boolean)|false equality policy passed through to the signal
+---@field redraw? boolean request a repaint when the event fires (default true)
 ---@field desc? string autocommand description
 
 --- Create a reactive signal driven by Neovim autocommands.
@@ -76,6 +77,9 @@ end
 ---
 --- Writes triggered by an event are wrapped in a `batch` so that, if a single
 --- callback updates several pieces of state, dependent effects settle once.
+--- After the write, a redraw is requested (coalesced through `request_redraw`)
+--- so the lines that read this source repaint; pass `redraw = false` for
+--- sources that should not, on their own, trigger a repaint.
 ---
 --- If called while a reactive computation or `root` scope is active, the
 --- backing autocommand is deleted when that scope is disposed. The returned
@@ -87,6 +91,7 @@ function M.from_autocmd(spec)
     assert(events, "heirline.source.from_autocmd: `events` is required")
 
     local compute = spec.get
+    local redraw = spec.redraw ~= false
     local get, set, on_event
 
     if compute then
@@ -112,6 +117,9 @@ function M.from_autocmd(spec)
             r.batch(function()
                 on_event(args)
             end)
+            if redraw then
+                M.request_redraw()
+            end
         end,
     })
 

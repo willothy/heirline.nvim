@@ -88,6 +88,42 @@ describe("source dispose", function()
     end)
 end)
 
+describe("source redraw requests", function()
+    it("requests a redraw when an event fires by default", function()
+        local original = source.request_redraw
+        local count = 0
+        source.request_redraw = function()
+            count = count + 1
+        end
+        local ok, err = pcall(function()
+            source.from_user_event("HeirlineSrcRedraw")
+            vim.cmd("doautocmd User HeirlineSrcRedraw")
+            eq(1, count)
+        end)
+        source.request_redraw = original
+        assert(ok, err)
+    end)
+
+    it("does not request a redraw when redraw = false", function()
+        local original = source.request_redraw
+        local count = 0
+        source.request_redraw = function()
+            count = count + 1
+        end
+        local ok, err = pcall(function()
+            source.from_autocmd({
+                events = "User",
+                pattern = "HeirlineSrcNoRedraw",
+                redraw = false,
+            })
+            vim.cmd("doautocmd User HeirlineSrcNoRedraw")
+            eq(0, count)
+        end)
+        source.request_redraw = original
+        assert(ok, err)
+    end)
+end)
+
 describe("source.request_redraw", function()
     it("coalesces and runs without error", function()
         source.request_redraw()
