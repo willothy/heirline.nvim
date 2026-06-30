@@ -9,7 +9,8 @@
 ## About
 
 Heirline.nvim is a no-nonsense Neovim plugin made for rendering statusline/winbar/tabline/statuscolumn format strings.
-It is designed around recursive inheritance to be exceptionally **fast** and **versatile**.
+It is built on a **fine-grained reactive system**: state lives in signals (driven by Neovim events), components are
+closures that read them, and a change re-renders only the components that actually depend on it.
 
 Heirline **does not** provide any defaults, in fact, heirline can be
 thought of as an API to generate Vim status format strings.
@@ -30,13 +31,13 @@ whatever you can imagine, from simple to complex rules!
 
 ## Features:
 
+- **Fine-grained reactivity**: Components re-render only when a signal they read changes; state comes from Neovim events through reactive sources, with no manual update wiring.
 - **Conditionals**: Build custom active/inactive and buftype/filetype/bufname statuslines or single components.
 - **Highlight propagation**: Seamlessly surround components within separators and/or set the (dynamic) coloring of a bunch of components at once.
-- **Modularity**: Statusline components can be reutilized/rearranged and will behave according to their position in the genealogical tree.
-- **Update triggers**: Re-evaluate components only when some condition is met or specific autocommand events are fired.
+- **Modularity**: Components are plain closures; reuse, nest, and rearrange them freely.
 - **Clickable**: Write pure lua callbacks to be executed when clicking a component.
-- **Dynamic resizing**: Specify how components should resize depending on available space.
-- **Full control**: You have hooks to fully control the statusline evaluation cycle.
+- **Dynamic resizing**: Flexible components adapt to the available width; buffer and tab lists page to fit.
+- **Per-window**: Each window renders in its own reactive scope, cached independently.
 
 Heirline is _not_ for everyone, heirline is for people who like tailoring their own tools (and also like lua):
 
@@ -67,16 +68,33 @@ use({
 
 ## Setup
 
+Each line is a **component**, built with `heirline.component`. A component is a closure that reads signals and
+returns its text; group them, give them highlights and conditions, and pass them to `setup`:
+
 ```lua
+local c = require("heirline.component")
+local signal = require("heirline.signal")
+local conditions = require("heirline.conditions")
+
+local mode = signal.mode() -- a reactive getter for the current mode
+
 require("heirline").setup({
-    statusline = {...},
-    winbar = {...},
-    tabline = {...},
-    statuscolumn = {...},
+    statusline = c.group({
+        c.text(function() return " " .. mode():upper() .. " " end, { hl = { bold = true } }),
+        c.text(" %f "),
+        c.text("%="), -- right-align what follows
+        c.text(function(ctx)
+            return conditions.is_active(ctx) and "active" or "inactive"
+        end),
+    }),
+    -- winbar = ...,
+    -- tabline = require("heirline.lists").buflist(my_buffer_component),
+    -- statuscolumn = ...,
 })
 ```
 
-Calling `setup` will load your statusline(s). To learn how to write a StatusLine, see the [docs](cookbook.md).
+Calling `setup` loads your line(s) and wires them to the matching Vim options. The component re-renders by itself
+when a signal it read (here, the mode) changes. To learn how to write components, see the [docs](cookbook.md).
 
 ### Donate
 
