@@ -81,6 +81,17 @@ function M.on_buf_change()
     end)
 end
 
+--- Recompute trigger for the tab list: tabs created, closed, or switched.
+---@return heirline.Trigger
+function M.on_tab_change()
+    return singleton("on_tab_change", function()
+        return (source.from_autocmd({
+            events = { "TabNew", "TabClosed", "TabEnter", "TabLeave" },
+            desc = "heirline: tab list changed",
+        }))
+    end)
+end
+
 --- Recompute trigger for window focus and layout changes.
 ---@return heirline.Trigger
 function M.on_win_change()
