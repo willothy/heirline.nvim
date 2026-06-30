@@ -29,9 +29,17 @@ local utils = require("heirline.utils")
 ---@alias heirline.HlSpec HeirlineHighlight|string|fun(ctx: heirline.Context): (HeirlineHighlight|string|nil)
 ---@alias heirline.Condition fun(ctx: heirline.Context): any
 
+---@alias heirline.OnClickCallback fun(ctx: heirline.Context, minwid: integer, nclicks: integer, button: string, mods: string): any
+---@class heirline.OnClick
+---@field callback heirline.OnClickCallback|string The Lua handler, or a Vim function/expression name to call directly.
+---@field name? string|fun(ctx: heirline.Context): string A stable global name for the handler; auto-generated when omitted.
+---@field minwid? integer|fun(ctx: heirline.Context): integer The `minwid` passed to the handler.
+---@field update? boolean Re-register the handler even if a function of `name` already exists.
+
 ---@class heirline.ComponentOpts
 ---@field hl? heirline.HlSpec Highlight for this component, merged over the inherited one.
 ---@field condition? heirline.Condition When it returns falsy, the component renders nothing.
+---@field on_click? heirline.OnClick|heirline.OnClickCallback Make the component clickable.
 
 --- Resolve a highlight spec to a plain highlight table in the given context.
 --- Functions are called with the context; string names are looked up.
@@ -78,6 +86,67 @@ local function merged_hl_getter(spec, ctx)
     end)
 end
 
+--- Monotonic counter backing auto-generated `on_click` handler names.
+local click_counter = 0
+
+--- Resolve a `minwid` spec to the value embedded in the click region.
+---@param minwid? integer|fun(ctx: heirline.Context): integer
+---@param ctx heirline.Context
+---@return integer|string
+local function resolve_minwid(minwid, ctx)
+    if minwid == nil then
+        return ""
+    end
+    if type(minwid) == "function" then
+        return minwid(ctx)
+    end
+    return minwid
+end
+
+--- Set up a component's click handler and return the markup that wraps its
+--- fragment into a clickable region (`prefix`, `suffix`). Registers a global
+--- handler for Lua callbacks (cleaned up with the owning scope) or points the
+--- region directly at a named Vim function for string callbacks.
+---@param spec? heirline.OnClick|heirline.OnClickCallback
+---@param ctx heirline.Context
+---@return string prefix, string suffix
+local function setup_on_click(spec, ctx)
+    if not spec then
+        return "", ""
+    end
+
+    local callback, name, minwid, update
+    if type(spec) == "function" then
+        callback = spec
+    else
+        callback, name, minwid, update = spec.callback, spec.name, spec.minwid, spec.update
+    end
+
+    local mw = resolve_minwid(minwid, ctx)
+
+    -- A string callback names a Vim function/expression; reference it directly.
+    if type(callback) == "string" then
+        return ("%%%s@%s@"):format(mw, callback), "%X"
+    end
+
+    local fname = type(name) == "function" and name(ctx) or name
+    if not fname then
+        click_counter = click_counter + 1
+        fname = "HeirlineOnClick" .. click_counter
+    end
+
+    if update or _G[fname] == nil then
+        _G[fname] = function(handler_minwid, nclicks, button, mods)
+            return callback(ctx, handler_minwid, nclicks, button, mods)
+        end
+        r.on_cleanup(function()
+            _G[fname] = nil
+        end)
+    end
+
+    return ("%%%s@v:lua.%s@"):format(mw, fname), "%X"
+end
+
 --- Derive a child context that inherits every field of its parent but carries a
 --- new inherited-highlight getter for descendants.
 ---@param ctx heirline.Context
@@ -105,6 +174,7 @@ function M.text(provider, opts)
     local condition = opts.condition
     return function(ctx)
         local hl = merged_hl_getter(opts.hl, ctx)
+        local click_prefix, click_suffix = setup_on_click(opts.on_click, ctx)
         return r.memo(function()
             if condition and not condition(ctx) then
                 return ""
@@ -121,7 +191,7 @@ function M.text(provider, opts)
                 return ""
             end
             local start, finish = hi.eval_hl(hl())
-            return start .. str .. finish
+            return click_prefix .. start .. str .. finish .. click_suffix
         end)
     end
 end
@@ -140,6 +210,7 @@ function M.group(children, opts)
     return function(ctx)
         local hl = merged_hl_getter(opts.hl, ctx)
         local child_ctx = derive_ctx(ctx, hl)
+        local click_prefix, click_suffix = setup_on_click(opts.on_click, ctx)
         local fragments = {}
         for i = 1, #children do
             fragments[i] = children[i](child_ctx)
@@ -152,7 +223,11 @@ function M.group(children, opts)
             for i = 1, #fragments do
                 parts[i] = fragments[i]()
             end
-            return table.concat(parts)
+            local body = table.concat(parts)
+            if body == "" then
+                return ""
+            end
+            return click_prefix .. body .. click_suffix
         end)
     end
 end

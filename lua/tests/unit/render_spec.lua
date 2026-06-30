@@ -118,6 +118,34 @@ describe("highlight inheritance", function()
     end)
 end)
 
+describe("on_click", function()
+    it("wraps the fragment and registers a handler that receives the context", function()
+        local seen
+        local rd = render.new(c.text("btn", {
+            on_click = {
+                name = "HeirlineTestClick",
+                callback = function(ctx, minwid, nclicks, button)
+                    seen = { win = ctx.win, minwid = minwid, nclicks = nclicks, button = button }
+                end,
+            },
+        }))
+        local out = rd.eval(curwin())
+        eq(true, out:find("@v:lua.HeirlineTestClick@", 1, true) ~= nil)
+        eq(true, out:find("%X", 1, true) ~= nil)
+
+        -- Vim would invoke the registered global on a mouse click.
+        _G.HeirlineTestClick(7, 2, "r", "")
+        eq(curwin(), seen.win)
+        eq(7, seen.minwid)
+        eq(2, seen.nclicks)
+        eq("r", seen.button)
+
+        rd.dispose_all()
+        -- The handler is cleaned up with its scope.
+        eq(nil, _G.HeirlineTestClick)
+    end)
+end)
+
 describe("per-window scopes", function()
     it("caches output independently per window", function()
         vim.cmd("wincmd o")
