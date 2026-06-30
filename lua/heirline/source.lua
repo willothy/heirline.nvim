@@ -55,15 +55,16 @@ function M.request_redraw()
     end)
 end
 
---- A pulse signal returned by event-only sources. Its integer value is an
---- opaque, monotonically increasing tick; read it solely to subscribe a
---- computation to the source's events, not for the value itself.
----@alias heirline.Trigger fun(): integer
+--- The getter of an event-only (pulse) source. Its value is the autocommand
+--- args table of the most recent matching event, or nil before any has fired.
+--- Read it to subscribe a computation to the events and, optionally, to inspect
+--- the event data (`data`, `buf`, `match`, `file`, ...).
+---@alias heirline.Trigger fun(): table?
 
 ---@class heirline.source.AutocmdSpec
 ---@field events string|string[] event name(s) to listen for; may also be passed positionally as `[1]`
 ---@field pattern? string|string[] autocommand pattern(s)
----@field get? fun(args: table): any computes the signal's value from the event args; omit for a pulse source
+---@field get? fun(args: table): any computes the signal's value from the autocommand event args (`data`, `buf`, `match`, ...); omit for a pulse source. A getter that reads the event args should set `immediate = false`, since the initial computation runs with no event.
 ---@field immediate? boolean for value sources, whether to compute an initial value eagerly (default true)
 ---@field equals? (fun(a: any, b: any): boolean)|false equality policy passed through to the signal
 ---@field redraw? boolean request a repaint when the event fires (default true)
@@ -106,11 +107,13 @@ function M.from_autocmd(spec)
             set(compute(args))
         end
     else
-        local tick = 0
-        get, set = r.signal(tick)
-        on_event = function()
-            tick = tick + 1
-            set(tick)
+        -- A pulse source carries the autocommand args of the most recent event
+        -- (nil before any has fired), so a reader can both subscribe to the
+        -- events and inspect their data. `equals = false` makes every event
+        -- notify, even when consecutive args compare equal.
+        get, set = r.signal(nil, { equals = false })
+        on_event = function(args)
+            set(args)
         end
     end
 

@@ -35,6 +35,43 @@ describe("source.from_autocmd value source", function()
         vim.cmd("doautocmd User HeirlineSrcLazy")
         eq("computed", get())
     end)
+
+    it("passes the autocommand args (including data) to the getter", function()
+        local seen
+        local get = source.from_autocmd({
+            events = "User",
+            pattern = "HeirlineSrcArgs",
+            immediate = false,
+            get = function(args)
+                seen = args
+                return args.data and args.data.value
+            end,
+        })
+        vim.api.nvim_exec_autocmds("User", {
+            pattern = "HeirlineSrcArgs",
+            data = { value = 42 },
+        })
+        eq(42, get())
+        eq("HeirlineSrcArgs", seen.match)
+        eq(42, seen.data.value)
+    end)
+end)
+
+describe("source.from_autocmd pulse source", function()
+    it("exposes the event args as the signal value", function()
+        local get = source.from_autocmd({
+            events = "User",
+            pattern = "HeirlineSrcPulseArgs",
+        })
+        eq(nil, get()) -- no event has fired yet
+        vim.api.nvim_exec_autocmds("User", {
+            pattern = "HeirlineSrcPulseArgs",
+            data = { n = 7 },
+        })
+        local args = get()
+        eq("HeirlineSrcPulseArgs", args.match)
+        eq(7, args.data.n)
+    end)
 end)
 
 describe("source.from_user_event pulse source", function()
