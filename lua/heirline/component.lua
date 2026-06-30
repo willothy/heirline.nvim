@@ -391,5 +391,46 @@ function M.list(spec)
     end
 end
 
+--- Wrap a component in separator delimiters tinted by a shared colour.
+---
+--- The left and right delimiters are drawn in `color` as their foreground while
+--- the wrapped component is drawn over `color` as its background, producing the
+--- familiar "powerline" surround. `color` may be a colour or a function of the
+--- context (returning nil to draw no tint); `delimiters` is a `{ left, right }`
+--- pair.
+---@param delimiters string[]
+---@param color heirline.HlSpec|nil|fun(ctx: heirline.Context): (HeirlineColor|nil)
+---@param child fun(ctx: heirline.Context): fun(): string
+---@return fun(ctx: heirline.Context): fun(): string
+function M.surround(delimiters, color, child)
+    local function tint(ctx)
+        if type(color) == "function" then
+            return color(ctx)
+        end
+        return color
+    end
+
+    return M.group({
+        M.text(delimiters[1], {
+            hl = function(ctx)
+                local c = tint(ctx)
+                return c and { fg = c } or nil
+            end,
+        }),
+        M.group({ child }, {
+            hl = function(ctx)
+                local c = tint(ctx)
+                return c and { bg = c } or nil
+            end,
+        }),
+        M.text(delimiters[2], {
+            hl = function(ctx)
+                local c = tint(ctx)
+                return c and { fg = c } or nil
+            end,
+        }),
+    })
+end
+
 return M
 

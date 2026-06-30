@@ -237,6 +237,26 @@ describe("flexible components", function()
     end)
 end)
 
+describe("surround", function()
+    it("wraps a component in tinted delimiters", function()
+        local rd = render.new(c.surround({ "[", "]" }, "#445566", c.text("x")))
+        local out = rd.eval(curwin())
+        -- Visible text is the body framed by the delimiters.
+        eq("[x]", vim.api.nvim_eval_statusline(out, { winid = curwin() }).str)
+        -- The delimiters carry a highlight (the tint).
+        eq(true, out:find("%%#") ~= nil)
+        rd.dispose_all()
+    end)
+
+    it("omits the tint when the color function returns nil", function()
+        local rd = render.new(c.surround({ "(", ")" }, function()
+            return nil
+        end, c.text("y")))
+        eq("(y)", vim.api.nvim_eval_statusline(rd.eval(curwin()), { winid = curwin() }).str)
+        rd.dispose_all()
+    end)
+end)
+
 describe("per-window scopes", function()
     it("caches output independently per window", function()
         vim.cmd("wincmd o")
