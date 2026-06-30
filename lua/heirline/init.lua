@@ -179,4 +179,32 @@ function M.eval_statuscolumn()
     return line and line.eval(vim.api.nvim_get_current_win()) or ""
 end
 
+--- Benchmark the average cold render time of each configured line.
+---
+--- Every iteration disposes the line's scopes before rendering, so each timing
+--- is a full from-scratch render (graph construction plus computing every
+--- component). This is a worst-case figure: real redraws are far cheaper
+--- because only the components whose signals changed recompute, while the rest
+--- are served from cache.
+---@param ntimes? integer iterations per line (default 1000)
+function M.timeit(ntimes)
+    ntimes = ntimes or 1000
+    local win = vim.api.nvim_get_current_win()
+    local total = 0
+    print(string.format("Average cold render times over %d runs:", ntimes))
+    for kind, line in pairs(lines) do
+        local elapsed = 0
+        for _ = 1, ntimes do
+            line.dispose_all()
+            local start = os.clock()
+            line.eval(win)
+            elapsed = elapsed + (os.clock() - start)
+        end
+        local avg = elapsed / ntimes
+        total = total + avg
+        print(string.format("%s: %.3f ms", kind, avg * 1000))
+    end
+    print(string.format("total: %.3f ms", total * 1000))
+end
+
 return M
