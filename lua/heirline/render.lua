@@ -12,6 +12,7 @@
 local M = {}
 
 local r = require("heirline.reactive")
+local flexible = require("heirline.flexible")
 
 --- Autocommand group used to drop a window's scope when the window closes.
 ---@type integer?
@@ -30,11 +31,13 @@ end
 ---@field get fun(): string Returns the (memoised) rendered line for the window.
 ---@field buf integer The buffer the scope was instantiated for.
 ---@field set_line? fun(lnum: integer, relnum: integer, virtnum: integer) Statuscolumn only: publish the line being drawn.
+---@field flex heirline.flexible.Registry The scope's flexible-component registry.
 
 ---@class heirline.RenderOpts
 ---@field hl? HeirlineHighlight|string|fun(): (HeirlineHighlight|string|nil) Root inherited highlight.
 ---@field global? boolean Render a single shared scope (for the tabline) instead of one per window.
 ---@field statuscolumn? boolean Render per screen line: expose reactive `lnum`/`relnum`/`virtnum` on the context, set from `v:lnum`/`v:relnum`/`v:virtnum` before each eval.
+---@field width? fun(win: integer): integer The width flexible components fit within; defaults to the window width (or `&columns` in global mode).
 
 --- Create a render driver for `component`.
 ---
@@ -49,6 +52,10 @@ function M.new(component, opts)
     local root_hl = opts.hl
     local global = opts.global == true
     local statuscolumn = opts.statuscolumn == true
+    local width = opts.width
+        or function(win)
+            return global and vim.o.columns or vim.api.nvim_win_get_width(win)
+        end
 
     --- Live scopes keyed by window id (or the constant `0` in global mode).
     ---@type table<integer, heirline.render.Scope>
@@ -68,7 +75,8 @@ function M.new(component, opts)
                 end
                 return value or {}
             end)
-            local ctx = { win = win, buf = buf, hl = hl }
+            local registry = flexible.new_registry()
+            local ctx = { win = win, buf = buf, hl = hl, flex = registry }
 
             -- For the statuscolumn, the line being drawn is reactive state: the
             -- driver republishes it before every per-line eval, so only the
@@ -91,7 +99,7 @@ function M.new(component, opts)
             end
 
             local output = component(ctx)
-            scope = { dispose = dispose, get = output, buf = buf, set_line = set_line }
+            scope = { dispose = dispose, get = output, buf = buf, set_line = set_line, flex = registry }
         end)
         return scope
     end
@@ -124,6 +132,18 @@ function M.new(component, opts)
         local ok, result = pcall(scope.get)
         if not ok then
             return ""
+        end
+
+        -- Adapt flexible components to the available width, then re-read so the
+        -- line reflects the new picks. Guarded so a fit error cannot break the
+        -- redraw.
+        if #scope.flex.entries > 0 then
+            if pcall(flexible.fit, scope.flex, result, width(win)) then
+                local refit_ok, refit = pcall(scope.get)
+                if refit_ok then
+                    result = refit
+                end
+            end
         end
         return result
     end

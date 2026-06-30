@@ -146,6 +146,27 @@ describe("on_click", function()
     end)
 end)
 
+describe("flexible components", function()
+    it("renders the widest option that fits the window", function()
+        local rd = render.new(c.flexible(1, {
+            c.text("AA"),
+            c.text("B"),
+        }))
+        eq("AA", rd.eval(curwin())) -- two columns fit any window
+        rd.dispose_all()
+    end)
+
+    it("contracts when the widest option overflows the window", function()
+        local rd = render.new(c.flexible(1, {
+            c.text(string.rep("A", 5000)),
+            c.text("B"),
+        }))
+        -- 5000 columns cannot fit any real window, so it falls back to "B".
+        eq("B", rd.eval(curwin()))
+        rd.dispose_all()
+    end)
+end)
+
 describe("per-window scopes", function()
     it("caches output independently per window", function()
         vim.cmd("wincmd o")

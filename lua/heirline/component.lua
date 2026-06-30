@@ -24,6 +24,7 @@ local utils = require("heirline.utils")
 ---@field lnum? fun(): integer Statuscolumn only: reactive `v:lnum` for the line being drawn.
 ---@field relnum? fun(): integer Statuscolumn only: reactive `v:relnum` for the line being drawn.
 ---@field virtnum? fun(): integer Statuscolumn only: reactive `v:virtnum` for the line being drawn.
+---@field flex? heirline.flexible.Registry The scope's flexible-component registry, when width adaptation is enabled.
 
 ---@alias heirline.Provider string|number|fun(ctx: heirline.Context): (string|number|nil)
 ---@alias heirline.HlSpec HeirlineHighlight|string|fun(ctx: heirline.Context): (HeirlineHighlight|string|nil)
@@ -232,4 +233,59 @@ function M.group(children, opts)
     end
 end
 
+--- Create a flexible component that renders one of several options to fit the
+--- available width.
+---
+--- The options are other components, ordered widest (most detailed) first. The
+--- component renders the widest option that fits; the render driver narrows it
+--- as space runs out. `priority` orders contraction across flexible components
+--- (lower contracts first) and is required for top-level flexible components;
+--- nested ones may pass `nil` to derive their priority from the enclosing
+--- flexible component.
+---@param priority integer? Contraction priority; required at the top level, derivable when nested.
+---@param options (fun(ctx: heirline.Context): fun(): string)[] Option components, widest first.
+---@param opts? heirline.ComponentOpts
+---@return fun(ctx: heirline.Context): fun(): string
+function M.flexible(priority, options, opts)
+    opts = opts or {}
+    local condition = opts.condition
+    return function(ctx)
+        local hl = merged_hl_getter(opts.hl, ctx)
+        local child_ctx = derive_ctx(ctx, hl)
+        local index, set_index = r.signal(1)
+
+        ---@type heirline.flexible.Entry
+        local entry = { priority = priority, index = index, set_index = set_index }
+        local registry = ctx.flex
+        if registry then
+            -- Register before instantiating options so nested flexible
+            -- components link to this one as their parent.
+            registry.register(entry)
+            registry.push(entry)
+        end
+
+        local fragments = {}
+        for i = 1, #options do
+            fragments[i] = options[i](child_ctx)
+        end
+
+        if registry then
+            registry.pop()
+        end
+        entry.options = fragments
+        entry.count = #fragments
+
+        return r.memo(function()
+            if condition and not condition(ctx) then
+                return ""
+            end
+            if entry.count == 0 then
+                return ""
+            end
+            return fragments[index()]()
+        end)
+    end
+end
+
 return M
+

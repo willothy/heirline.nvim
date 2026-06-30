@@ -116,7 +116,13 @@ function M.setup(config)
     end
 
     if config.statusline then
-        lines.statusline = render.new(config.statusline)
+        lines.statusline = render.new(config.statusline, {
+            -- With a global statusline (laststatus=3) flexible components fit the
+            -- whole screen; otherwise they fit the window.
+            width = function(win)
+                return vim.o.laststatus == 3 and vim.o.columns or vim.api.nvim_win_get_width(win)
+            end,
+        })
         vim.o.statusline = line_expr("eval_statusline")
     end
 
