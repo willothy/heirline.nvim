@@ -287,5 +287,91 @@ function M.flexible(priority, options, opts)
     end
 end
 
+---@class heirline.list.Child
+---@field get fun(): string The child's rendered fragment getter.
+---@field dispose fun() Tears down the child's reactive scope.
+
+--- Instantiate one list child in its own disposable reactive scope.
+---@param factory fun(item: any, index: integer): (fun(ctx: heirline.Context): fun(): string)
+---@param ctx heirline.Context
+---@param item any
+---@param index integer
+---@return heirline.list.Child
+local function create_list_child(factory, ctx, item, index)
+    local child
+    r.root(function(dispose)
+        child = { get = factory(item, index)(ctx), dispose = dispose }
+    end)
+    return child
+end
+
+---@class heirline.ListOpts
+---@field items fun(ctx: heirline.Context): any[] Reactive list of items to render.
+---@field render fun(item: any, index: integer): (fun(ctx: heirline.Context): fun(): string) Builds a component for an item.
+---@field key? fun(item: any, index: integer): any Stable identity for an item (defaults to the item itself).
+---@field hl? heirline.HlSpec
+---@field condition? heirline.Condition
+
+--- Create a dynamic, keyed list component.
+---
+--- `items` is read reactively; each item is rendered by the component returned
+--- from `render`, in its own scope so it can hold per-item reactive state. As
+--- the item list changes, children for new keys are created and children whose
+--- keys disappear are disposed. Every child is torn down when the list's own
+--- scope is. Children persist across updates while their key remains, so a
+--- component keyed by (say) a buffer number keeps its state as the list reorders.
+---@param spec heirline.ListOpts
+---@return fun(ctx: heirline.Context): fun(): string
+function M.list(spec)
+    local key_of = spec.key
+    return function(ctx)
+        local hl = merged_hl_getter(spec.hl, ctx)
+        local base_ctx = derive_ctx(ctx, hl)
+
+        --- Live children keyed by item identity.
+        ---@type table<any, heirline.list.Child>
+        local children = {}
+
+        -- Tear every child down when the enclosing scope is disposed.
+        r.on_cleanup(function()
+            for k, child in pairs(children) do
+                child.dispose()
+                children[k] = nil
+            end
+        end)
+
+        return r.memo(function()
+            if spec.condition and not spec.condition(base_ctx) then
+                return ""
+            end
+
+            local items = spec.items(base_ctx) or {}
+            local present = {}
+            local parts = {}
+            for index = 1, #items do
+                local item = items[index]
+                local key = key_of and key_of(item, index) or item
+                present[key] = true
+                local child = children[key]
+                if not child then
+                    child = create_list_child(spec.render, base_ctx, item, index)
+                    children[key] = child
+                end
+                parts[index] = child.get()
+            end
+
+            -- Dispose children whose keys are no longer present.
+            for key, child in pairs(children) do
+                if not present[key] then
+                    child.dispose()
+                    children[key] = nil
+                end
+            end
+
+            return table.concat(parts)
+        end)
+    end
+end
+
 return M
 

@@ -146,6 +146,54 @@ describe("on_click", function()
     end)
 end)
 
+describe("dynamic list", function()
+    it("renders an item per entry and updates as the list changes", function()
+        local items_get, items_set = r.signal({ 1, 2, 3 })
+        local rd = render.new(c.list({
+            items = function()
+                return items_get()
+            end,
+            render = function(key)
+                return c.text("[" .. key .. "]")
+            end,
+        }))
+        eq("[1][2][3]", rd.eval(curwin()))
+        items_set({ 1, 3 })
+        eq("[1][3]", rd.eval(curwin()))
+        items_set({ 1, 3, 4, 5 })
+        eq("[1][3][4][5]", rd.eval(curwin()))
+        rd.dispose_all()
+    end)
+
+    it("disposes children whose keys disappear", function()
+        local items_get, items_set = r.signal({ "a", "b", "c" })
+        local cleaned = {}
+        local rd = render.new(c.list({
+            items = function()
+                return items_get()
+            end,
+            render = function(key)
+                return function(ctx)
+                    r.on_cleanup(function()
+                        cleaned[key] = true
+                    end)
+                    return c.text(key)(ctx)
+                end
+            end,
+        }))
+        eq("abc", rd.eval(curwin()))
+        items_set({ "a", "c" })
+        rd.eval(curwin())
+        eq(true, cleaned["b"]) -- the dropped child's scope was disposed
+        eq(nil, cleaned["a"])
+
+        rd.dispose_all()
+        -- Remaining children are disposed with the list scope.
+        eq(true, cleaned["a"])
+        eq(true, cleaned["c"])
+    end)
+end)
+
 describe("flexible components", function()
     it("renders the widest option that fits the window", function()
         local rd = render.new(c.flexible(1, {
