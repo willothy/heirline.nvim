@@ -25,6 +25,18 @@ local function ensure_augroup()
     return augroup
 end
 
+--- A global generation counter every line's root highlight subscribes to.
+--- Bumping it invalidates the highlight chain of every component, forcing a
+--- full re-render. Used to recover after the colorscheme (and therefore the
+--- highlight definitions every cached fragment refers to) changes.
+local generation_get, generation_set = r.signal(0)
+
+--- Invalidate every component's highlight chain across all lines and windows,
+--- forcing a full re-render on the next eval.
+function M.invalidate()
+    generation_set(generation_get() + 1)
+end
+
 ---@class heirline.render.Scope
 ---@field dispose fun() Tears down the scope's reactive tree.
 ---@field get fun(): string Returns the (memoised) rendered line for the window.
@@ -59,6 +71,10 @@ function M.new(component, opts)
         local scope
         r.root(function(dispose)
             local hl = r.memo(function()
+                -- Subscribe to the global generation so a colorscheme change
+                -- invalidates this root highlight and, transitively, every
+                -- component's merged highlight that inherits from it.
+                generation_get()
                 local value = root_hl
                 if type(value) == "function" then
                     value = value()
