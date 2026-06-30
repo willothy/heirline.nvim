@@ -37,3 +37,71 @@ describe("tablist", function()
         rd.dispose_all()
     end)
 end)
+
+describe("buflist", function()
+    -- Render a buflist and return its visible text (markup stripped).
+    local function display(rd, win)
+        return vim.api.nvim_eval_statusline(rd.eval(win), { winid = win }).str
+    end
+
+    local function make_bufs(n)
+        local bufs = {}
+        for i = 1, n do
+            bufs[i] = vim.api.nvim_create_buf(true, false)
+        end
+        return bufs
+    end
+
+    -- One character per buffer: "O" when active, "o" otherwise.
+    local marker = function(ctx)
+        return c.text(function()
+            return ctx.is_active() and "O" or "o"
+        end)(ctx)
+    end
+
+    it("renders every buffer and marks the active one", function()
+        local bufs = make_bufs(4)
+        local rd = render.new(lists.buflist(marker, {
+            buffers = function()
+                return bufs
+            end,
+        }))
+
+        eq("oooo", display(rd, curwin())) -- none of these is current yet
+
+        vim.api.nvim_set_current_buf(bufs[2])
+        eq("oOoo", display(rd, curwin()))
+
+        rd.dispose_all()
+        for _, b in ipairs(bufs) do
+            pcall(vim.api.nvim_buf_delete, b, { force = true })
+        end
+    end)
+
+    it("pages to fit the width and shows the active buffer's page", function()
+        local bufs = make_bufs(4)
+        -- Width 3 leaves room for one buffer between the two 1-column markers.
+        local rd = render.new(lists.buflist(marker, {
+            buffers = function()
+                return bufs
+            end,
+        }), {
+            width = function()
+                return 3
+            end,
+        })
+
+        vim.api.nvim_set_current_buf(bufs[2])
+        -- The active buffer sits on an inner page, so both markers show.
+        eq("<O>", display(rd, curwin()))
+
+        vim.api.nvim_set_current_buf(bufs[1])
+        -- First buffer: only the trailing marker shows.
+        eq("O>", display(rd, curwin()))
+
+        rd.dispose_all()
+        for _, b in ipairs(bufs) do
+            pcall(vim.api.nvim_buf_delete, b, { force = true })
+        end
+    end)
+end)

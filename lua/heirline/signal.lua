@@ -81,6 +81,17 @@ function M.on_buf_change()
     end)
 end
 
+--- Recompute trigger for the buffer list: buffers added, deleted, or entered.
+---@return heirline.Trigger
+function M.on_buflist_change()
+    return singleton("on_buflist_change", function()
+        return (source.from_autocmd({
+            events = { "BufAdd", "BufDelete", "BufEnter", "BufLeave", "BufWinEnter" },
+            desc = "heirline: buffer list changed",
+        }))
+    end)
+end
+
 --- Recompute trigger for the tab list: tabs created, closed, or switched.
 ---@return heirline.Trigger
 function M.on_tab_change()
