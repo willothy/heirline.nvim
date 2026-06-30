@@ -211,6 +211,21 @@ describe("reactive root", function()
         set(3) -- effect disposed with the root
         eq(2, runs)
     end)
+
+    it("runs cleanups registered directly on the root scope on dispose", function()
+        local cleaned = 0
+        local captured_dispose
+        r.root(function(dispose)
+            captured_dispose = dispose
+            -- Registered against the root owner, not a computation.
+            r.on_cleanup(function()
+                cleaned = cleaned + 1
+            end)
+        end)
+        eq(0, cleaned)
+        captured_dispose()
+        eq(1, cleaned)
+    end)
 end)
 
 describe("reactive equality policy", function()

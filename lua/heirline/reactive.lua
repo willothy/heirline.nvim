@@ -77,7 +77,8 @@ local flushing = false
 ---@field disposed? boolean True once the node has been torn down.
 
 ---@class heirline.reactive.Owner
----@field owned? heirline.reactive.Node[]
+---@field owned? heirline.reactive.Node[] Nodes created within this scope, disposed with it.
+---@field cleanups? (fun(): any)[] Callbacks registered via `on_cleanup`, run on disposal.
 
 --- Compare two values under a node's equality policy.
 --- A node may set `equals` to a custom predicate, or to `false` to declare that
@@ -470,17 +471,22 @@ function M.batch(fn)
     return result
 end
 
---- Register a cleanup callback on the currently executing computation. It runs
---- immediately before the computation's next recomputation and once more when
---- the computation is disposed. Outside any computation this is a no-op.
+--- Register a cleanup callback on the current ownership scope.
+---
+--- The scope is the running memo/effect or the enclosing `root`. The callback
+--- runs immediately before that scope's next recomputation (for computations)
+--- and once more when the scope is disposed. `untrack` does not change the
+--- ownership scope, so cleanups registered inside it still attach to the
+--- surrounding computation. Outside any scope this is a no-op.
 ---@param fn fun(): any
 ---@return fun(): any fn
 function M.on_cleanup(fn)
-    if listener then
-        if listener.cleanups then
-            listener.cleanups[#listener.cleanups + 1] = fn
+    local owner = current_owner
+    if owner then
+        if owner.cleanups then
+            owner.cleanups[#owner.cleanups + 1] = fn
         else
-            listener.cleanups = { fn }
+            owner.cleanups = { fn }
         end
     end
     return fn
@@ -507,6 +513,13 @@ function M.root(fn)
                 dispose_node(owned[i])
             end
             owner.owned = nil
+        end
+        if owner.cleanups then
+            local cleanups = owner.cleanups
+            for i = #cleanups, 1, -1 do
+                cleanups[i]()
+            end
+            owner.cleanups = nil
         end
     end
 
