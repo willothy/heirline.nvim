@@ -136,14 +136,20 @@ function M.setup(config)
     end
 
     -- A colorscheme change rewrites the highlight definitions that cached
-    -- fragments refer to; reset the cache and force a full re-render.
+    -- fragments refer to. Reset the highlight cache and dispose every scope so
+    -- the next eval rebuilds the component trees from scratch, re-registering
+    -- the highlight groups. A rebuild (rather than signal-based invalidation)
+    -- is used because unchanged highlight values would otherwise be cut off by
+    -- the reactive system and never recompute.
     local group = vim.api.nvim_create_augroup("Heirline_update_autocmds", { clear = true })
     vim.api.nvim_create_autocmd("ColorScheme", {
         group = group,
         desc = "Heirline: rebuild highlights after a colorscheme change",
         callback = function()
             M.reset_highlights()
-            render.invalidate()
+            for _, line in pairs(lines) do
+                line.dispose_all()
+            end
             source.request_redraw()
         end,
     })

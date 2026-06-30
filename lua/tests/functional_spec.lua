@@ -102,6 +102,26 @@ describe("tabline", function()
     end)
 end)
 
+describe("colorscheme", function()
+    it("re-registers highlight groups after a colorscheme change", function()
+        vim.cmd("wincmd o")
+        h.setup({
+            statusline = c.text("x", { hl = { fg = "#abcdef", bold = true } }),
+        })
+        eval()
+        -- The component registered at least one highlight group.
+        assert(next(h.get_highlights()) ~= nil)
+
+        vim.cmd("doautocmd ColorScheme")
+        -- The cache was cleared and scopes disposed by the handler.
+        eq(nil, next(h.get_highlights()))
+
+        -- Re-rendering rebuilds the trees and re-registers the groups.
+        eval()
+        assert(next(h.get_highlights()) ~= nil)
+    end)
+end)
+
 describe("statuscolumn", function()
     it("renders each line from its reactive line number", function()
         vim.cmd("wincmd o")
