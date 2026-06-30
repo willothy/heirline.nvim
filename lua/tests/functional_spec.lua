@@ -101,3 +101,46 @@ describe("tabline", function()
         eq("tabs", vim.api.nvim_eval_statusline(vim.o.tabline, { winid = 0, maxwidth = 0 }).str)
     end)
 end)
+
+describe("statuscolumn", function()
+    it("renders each line from its reactive line number", function()
+        vim.cmd("wincmd o")
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, { "l1", "l2", "l3", "l4", "l5" })
+        h.setup({
+            statuscolumn = c.text(function(ctx)
+                return ctx.lnum() .. " "
+            end),
+        })
+        eq("%{%v:lua.require'heirline'.eval_statuscolumn()%}", vim.o.statuscolumn)
+
+        local function col(lnum)
+            return vim.api.nvim_eval_statusline(vim.o.statuscolumn, {
+                winid = 0,
+                use_statuscol_lnum = lnum,
+            }).str
+        end
+
+        -- Each line gets its own value; the per-window cache does not pin a
+        -- single line's result to the whole column.
+        eq("1 ", col(1))
+        eq("3 ", col(3))
+        eq("5 ", col(5))
+        eq("2 ", col(2))
+    end)
+
+    it("exposes relnum to components", function()
+        vim.cmd("wincmd o")
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, { "a", "b", "c" })
+        h.setup({
+            statuscolumn = c.text(function(ctx)
+                return ctx.lnum() .. ":" .. ctx.relnum() .. " "
+            end),
+        })
+        local out = vim.api.nvim_eval_statusline(vim.o.statuscolumn, {
+            winid = 0,
+            use_statuscol_lnum = 2,
+        }).str
+        -- v:lnum is the absolute line; v:relnum is its distance from the cursor.
+        eq("2:", out:sub(1, 2))
+    end)
+end)

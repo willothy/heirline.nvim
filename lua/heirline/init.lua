@@ -85,6 +85,7 @@ end
 ---@field statusline? fun(ctx: heirline.Context): fun(): string
 ---@field winbar? fun(ctx: heirline.Context): fun(): string
 ---@field tabline? fun(ctx: heirline.Context): fun(): string
+---@field statuscolumn? fun(ctx: heirline.Context): fun(): string
 ---@field opts? heirline.SetupOpts
 
 ---@class heirline.SetupOpts
@@ -129,6 +130,11 @@ function M.setup(config)
         vim.o.tabline = line_expr("eval_tabline")
     end
 
+    if config.statuscolumn then
+        lines.statuscolumn = render.new(config.statuscolumn, { statuscolumn = true })
+        vim.o.statuscolumn = line_expr("eval_statuscolumn")
+    end
+
     -- A colorscheme change rewrites the highlight definitions that cached
     -- fragments refer to; reset the cache and force a full re-render.
     local group = vim.api.nvim_create_augroup("Heirline_update_autocmds", { clear = true })
@@ -158,6 +164,12 @@ end
 ---@return string
 function M.eval_tabline()
     local line = lines.tabline
+    return line and line.eval(vim.api.nvim_get_current_win()) or ""
+end
+
+---@return string
+function M.eval_statuscolumn()
+    local line = lines.statuscolumn
     return line and line.eval(vim.api.nvim_get_current_win()) or ""
 end
 

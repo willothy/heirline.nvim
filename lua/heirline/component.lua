@@ -21,6 +21,9 @@ local utils = require("heirline.utils")
 ---@field buf integer The buffer displayed in `win`.
 ---@field tab? integer The tabpage, when relevant (tabline rendering).
 ---@field hl fun(): table A getter for the inherited, already-merged highlight.
+---@field lnum? fun(): integer Statuscolumn only: reactive `v:lnum` for the line being drawn.
+---@field relnum? fun(): integer Statuscolumn only: reactive `v:relnum` for the line being drawn.
+---@field virtnum? fun(): integer Statuscolumn only: reactive `v:virtnum` for the line being drawn.
 
 ---@alias heirline.Provider string|number|fun(ctx: heirline.Context): (string|number|nil)
 ---@alias heirline.HlSpec HeirlineHighlight|string|fun(ctx: heirline.Context): (HeirlineHighlight|string|nil)
@@ -75,13 +78,18 @@ local function merged_hl_getter(spec, ctx)
     end)
 end
 
---- Derive a child context that inherits `win`/`buf`/`tab` but carries a new
---- inherited-highlight getter for descendants.
+--- Derive a child context that inherits every field of its parent but carries a
+--- new inherited-highlight getter for descendants.
 ---@param ctx heirline.Context
 ---@param hl fun(): table
 ---@return heirline.Context
 local function derive_ctx(ctx, hl)
-    return { win = ctx.win, buf = ctx.buf, tab = ctx.tab, hl = hl }
+    local child = {}
+    for k, v in pairs(ctx) do
+        child[k] = v
+    end
+    child.hl = hl
+    return child
 end
 
 --- Create a leaf component that renders text from a provider.

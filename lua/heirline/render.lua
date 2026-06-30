@@ -41,10 +41,12 @@ end
 ---@field dispose fun() Tears down the scope's reactive tree.
 ---@field get fun(): string Returns the (memoised) rendered line for the window.
 ---@field buf integer The buffer the scope was instantiated for.
+---@field set_line? fun(lnum: integer, relnum: integer, virtnum: integer) Statuscolumn only: publish the line being drawn.
 
 ---@class heirline.RenderOpts
 ---@field hl? HeirlineHighlight|string|fun(): (HeirlineHighlight|string|nil) Root inherited highlight.
 ---@field global? boolean Render a single shared scope (for the tabline) instead of one per window.
+---@field statuscolumn? boolean Render per screen line: expose reactive `lnum`/`relnum`/`virtnum` on the context, set from `v:lnum`/`v:relnum`/`v:virtnum` before each eval.
 
 --- Create a render driver for `component`.
 ---
@@ -58,6 +60,7 @@ function M.new(component, opts)
     opts = opts or {}
     local root_hl = opts.hl
     local global = opts.global == true
+    local statuscolumn = opts.statuscolumn == true
 
     --- Live scopes keyed by window id (or the constant `0` in global mode).
     ---@type table<integer, heirline.render.Scope>
@@ -82,8 +85,29 @@ function M.new(component, opts)
                 return value or {}
             end)
             local ctx = { win = win, buf = buf, hl = hl }
+
+            -- For the statuscolumn, the line being drawn is reactive state: the
+            -- driver republishes it before every per-line eval, so only the
+            -- components that read it recompute while the rest stay cached.
+            local set_line
+            if statuscolumn then
+                local lnum_get, lnum_set = r.signal(0)
+                local relnum_get, relnum_set = r.signal(0)
+                local virtnum_get, virtnum_set = r.signal(0)
+                ctx.lnum = lnum_get
+                ctx.relnum = relnum_get
+                ctx.virtnum = virtnum_get
+                set_line = function(lnum, relnum, virtnum)
+                    r.batch(function()
+                        lnum_set(lnum)
+                        relnum_set(relnum)
+                        virtnum_set(virtnum)
+                    end)
+                end
+            end
+
             local output = component(ctx)
-            scope = { dispose = dispose, get = output, buf = buf }
+            scope = { dispose = dispose, get = output, buf = buf, set_line = set_line }
         end)
         return scope
     end
@@ -107,6 +131,10 @@ function M.new(component, opts)
         if not scope then
             scope = instantiate(win, buf)
             scopes[key] = scope
+        end
+
+        if scope.set_line then
+            scope.set_line(vim.v.lnum, vim.v.relnum, vim.v.virtnum)
         end
 
         local ok, result = pcall(scope.get)
