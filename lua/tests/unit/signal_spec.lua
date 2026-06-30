@@ -3,6 +3,27 @@ local eq = assert.equals
 local r = require("heirline.reactive")
 local signal = require("heirline.signal")
 
+describe("singleton source lifecycle", function()
+    -- Runs first so the on_lsp_change singleton is created inside the effect
+    -- below: it must outlive that computation's re-runs.
+    it("keeps a singleton source alive when its first reader re-runs", function()
+        local force, set_force = r.signal(0)
+        local runs = 0
+        r.effect(function()
+            force()
+            signal.on_lsp_change()() -- first read creates the singleton source
+            runs = runs + 1
+        end)
+        eq(1, runs)
+
+        set_force(1) -- re-run the effect; the source must not be disposed with it
+        eq(2, runs)
+
+        vim.api.nvim_exec_autocmds("LspAttach", { data = {} })
+        eq(3, runs) -- the source survived and still pulses
+    end)
+end)
+
 describe("signal.mode", function()
     it("returns a singleton getter for the current mode string", function()
         local mode = signal.mode()

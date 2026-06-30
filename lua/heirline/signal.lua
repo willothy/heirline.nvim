@@ -13,6 +13,7 @@
 ---@class heirline.Signal
 local M = {}
 
+local r = require("heirline.reactive")
 local source = require("heirline.source")
 
 --- Cache of singleton getters keyed by accessor name. The getters carry
@@ -22,6 +23,11 @@ local singletons = {}
 
 --- Return the cached singleton for `key`, creating it with `factory` on first
 --- use.
+---
+--- The factory runs inside a detached `root` so the source it creates lives for
+--- the process, rather than being torn down with whatever computation happened
+--- to read it first (a source's autocommand is otherwise disposed with the
+--- scope that was active when `from_autocmd` registered its cleanup).
 ---@generic T
 ---@param key string
 ---@param factory fun(): fun(): T
@@ -29,7 +35,9 @@ local singletons = {}
 local function singleton(key, factory)
     local getter = singletons[key]
     if not getter then
-        getter = factory()
+        r.root(function()
+            getter = factory()
+        end)
         singletons[key] = getter
     end
     return getter
