@@ -305,10 +305,15 @@ local function create_list_child(factory, ctx, item, index)
     return child
 end
 
+---@class heirline.list.Entry
+---@field key any The item's stable identity.
+---@field get fun(): string The rendered fragment getter for the item.
+
 ---@class heirline.ListOpts
 ---@field items fun(ctx: heirline.Context): any[] Reactive list of items to render.
 ---@field render fun(item: any, index: integer): (fun(ctx: heirline.Context): fun(): string) Builds a component for an item.
 ---@field key? fun(item: any, index: integer): any Stable identity for an item (defaults to the item itself).
+---@field layout? fun(entries: heirline.list.Entry[], ctx: heirline.Context): string Compose the ordered entries into the final string; defaults to concatenating them all.
 ---@field hl? heirline.HlSpec
 ---@field condition? heirline.Condition
 
@@ -320,10 +325,15 @@ end
 --- keys disappear are disposed. Every child is torn down when the list's own
 --- scope is. Children persist across updates while their key remains, so a
 --- component keyed by (say) a buffer number keeps its state as the list reorders.
+---
+--- By default the children are concatenated in order; pass `layout` to compose
+--- them differently — for example to render only a subset (paging) with markers
+--- around it.
 ---@param spec heirline.ListOpts
 ---@return fun(ctx: heirline.Context): fun(): string
 function M.list(spec)
     local key_of = spec.key
+    local layout = spec.layout
     return function(ctx)
         local hl = merged_hl_getter(spec.hl, ctx)
         local base_ctx = derive_ctx(ctx, hl)
@@ -347,7 +357,7 @@ function M.list(spec)
 
             local items = spec.items(base_ctx) or {}
             local present = {}
-            local parts = {}
+            local ordered = {}
             for index = 1, #items do
                 local item = items[index]
                 local key = key_of and key_of(item, index) or item
@@ -357,7 +367,7 @@ function M.list(spec)
                     child = create_list_child(spec.render, base_ctx, item, index)
                     children[key] = child
                 end
-                parts[index] = child.get()
+                ordered[index] = { key = key, get = child.get }
             end
 
             -- Dispose children whose keys are no longer present.
@@ -368,6 +378,14 @@ function M.list(spec)
                 end
             end
 
+            if layout then
+                return layout(ordered, base_ctx)
+            end
+
+            local parts = {}
+            for index = 1, #ordered do
+                parts[index] = ordered[index].get()
+            end
             return table.concat(parts)
         end)
     end

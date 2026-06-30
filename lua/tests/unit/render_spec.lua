@@ -165,6 +165,28 @@ describe("dynamic list", function()
         rd.dispose_all()
     end)
 
+    it("composes children through a custom layout", function()
+        local items_get = r.signal({ "a", "b", "c", "d" })
+        local rd = render.new(c.list({
+            items = function()
+                return items_get()
+            end,
+            render = function(key)
+                return c.text(key)
+            end,
+            -- Render only the first two entries, wrapped in markers.
+            layout = function(entries)
+                local out = "<"
+                for i = 1, math.min(2, #entries) do
+                    out = out .. entries[i].get()
+                end
+                return out .. ">"
+            end,
+        }))
+        eq("<ab>", rd.eval(curwin()))
+        rd.dispose_all()
+    end)
+
     it("disposes children whose keys disappear", function()
         local items_get, items_set = r.signal({ "a", "b", "c" })
         local cleaned = {}
